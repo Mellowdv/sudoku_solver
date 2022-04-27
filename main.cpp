@@ -6,6 +6,8 @@
 const int rowSize = 9;
 const float fieldSize = 50;
 const std::string fontName = "Iosevka Nerd Font Complete Mono.ttf";
+const int fontSize = 32;
+const float originPoint = 10.0f;
 
 class Cell {
 
@@ -22,6 +24,11 @@ public:
 
     void setValue(int newValue) {
         value = newValue;
+        textField.setString(std::to_string(value));
+    }
+
+    void setEmpty() {
+        textField.setString("");
     }
 
     void setPosition(sf::Vector2f origin) {
@@ -32,26 +39,28 @@ public:
         textField.setPosition(origin);
     }
 
+    void setFieldFillColor(sf::Color color) {
+        field.setFillColor(color);
+    }
+
     sf::RectangleShape getField() {
         return field;
     }
 
     sf::Text getTextField() {
-        std::cout << "Managed to get here." << std::endl;
         return textField;
     }
 
-    Cell(int newValue, sf::Font& font) {
+    Cell(sf::Font& font) {
         field = sf::RectangleShape(sf::Vector2f(fieldSize, fieldSize));
         field.setFillColor(sf::Color::White);
         field.setOutlineColor(sf::Color::Black);
         field.setOutlineThickness(2.f);
 
-        std::cout << "Font loaded" << std::endl;
-        value = newValue;
+        //std::cout << "Font loaded" << std::endl;
         textField.setFont(font);
-        textField.setString(std::to_string(value));
-        textField.setCharacterSize(24);
+        textField.setString("");
+        textField.setCharacterSize(fontSize);
         textField.setFillColor(sf::Color::Black);
     }
 };
@@ -68,9 +77,9 @@ public:
             playingField.push_back(row);
 
             for (int j = 0; j < rowSize; j++) {
-                playingField.at(i).push_back(Cell(j + 1, font));
+                playingField.at(i).push_back(Cell(font));
                 playingField.at(i).at(j).setPosition(sf::Vector2f(origin.x + (fieldSize * j), origin.y));
-                playingField.at(i).at(j).setTextPosition(sf::Vector2f(origin.x + (fieldSize * j), origin.y));
+                playingField.at(i).at(j).setTextPosition(sf::Vector2f(origin.x + (fieldSize * j) + 16, origin.y + 5));
             }
             origin = sf::Vector2f(origin.x, (origin.y + fieldSize));
         }
@@ -84,7 +93,39 @@ public:
             }
         }
     }
+
+    void accessCell(std::vector<int> &cellAddress, sf::Color color) { 
+        playingField.at(cellAddress.at(0)).at(cellAddress.at(1)).setFieldFillColor(color);
+    }
+
+    void eraseCell(std::vector<int> &cellAddress) {
+        playingField.at(cellAddress.at(0)).at(cellAddress.at(1)).setEmpty();
+    }
+
+    void setCellValue(std::vector<int> &cellAddress, int value) {
+        playingField.at(cellAddress.at(0)).at(cellAddress.at(1)).setValue(value);
+    }
 };
+
+std::vector<int> determineCell(int& x, int& y) {
+    
+    std::vector<int> cellCoordinates;
+    cellCoordinates.push_back(x);
+    cellCoordinates.push_back(y);
+
+    // determine column
+    for (int i = 0; i < rowSize; i++) {
+        if (x > (fieldSize * i) + originPoint)
+            cellCoordinates.at(1) = i;
+    }
+
+    // determine row
+    for (int j = 0; j < rowSize; j++) {
+        if (y > (fieldSize * j) + originPoint)
+            cellCoordinates.at(0) = j;
+    }
+    return cellCoordinates;
+}
 
 int main()
 {
@@ -96,6 +137,9 @@ int main()
     window.setVerticalSyncEnabled(true);
 
     Grid playingField = Grid(sf::Vector2f(10.f,10.f), font);
+    std::vector<int> activeCell;
+    activeCell.clear();
+
 
     while (window.isOpen()) {
         sf::Event event;
@@ -105,15 +149,51 @@ int main()
                 case sf::Event::Closed: {
                     window.close();
                 }
-                case sf::Event::TextEntered: {
-                    if (event.text.unicode < 128)
-                        std::cout << "Character typed: " << static_cast<char>(event.text.unicode) << std::endl;
+                case sf::Event::MouseButtonPressed: {
+                    if (event.mouseButton.button == sf::Mouse::Left) {
+                        int x = event.mouseButton.x;
+                        int y = event.mouseButton.y;
+                        int fieldBorder = (fieldSize * rowSize) + originPoint;
+                        std::cout << "Mouse position: " << x << ", " << y << "." << std::endl;
+                        if ((x > fieldBorder || y > fieldBorder) || (x < originPoint || y < originPoint))
+                            std::cout << "Out of bounds";
+                        else if (activeCell.size() == 0) {
+                            activeCell = determineCell(x, y);
+                            playingField.accessCell(activeCell, sf::Color::Yellow);
+                        }
+                        else {
+                                playingField.accessCell(activeCell, sf::Color::White);
+                                activeCell = determineCell(x, y);
+                                playingField.accessCell(activeCell, sf::Color::Yellow);
+                        }
+                        std::cout << "Active cell is: [" << activeCell.at(0) << "][" << activeCell.at(1) << "]" << std::endl;
+                    }
+                }
+                case sf::Event::KeyPressed: {
+                    if (activeCell.size() == 0)
+                        std::cout << "No active cell." << std::endl;
+                    else {
+                        switch (event.key.code) {
+                            case sf::Keyboard::Backspace: {
+                                playingField.eraseCell(activeCell);
+                                break;
+                            }
+                            default: {
+                                if (event.key.code >= 27 && event.key.code <= 35) {
+                                    playingField.setCellValue(activeCell, event.key.code - 26);
+                                    break;
+                                }
+                                else
+                                    break;
+                            }
+                        }
+                    }
                 }
             }
         }
         window.clear(sf::Color::White);
         playingField.drawGrid(window);
         window.display();
-    }
+        }
     return 0;
 }
